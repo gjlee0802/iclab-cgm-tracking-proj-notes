@@ -1,4 +1,4 @@
-# Notes for CGM Tracking Project (KAIST ICLab summer intership)
+# Notes for CGM Tracking Project (KAIST ICLab summer internship)
 
 ## Sensors 
 
