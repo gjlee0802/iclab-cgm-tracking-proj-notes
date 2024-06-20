@@ -159,41 +159,41 @@ DexCollectionType.setDexCollectionType를 통해 수집할 대상 CGM 센서를 
 
 ### DexCollectionHelper.java
 #### assistance() : 
-    - Dexcom G6, G7, 1 / G5에 해당하는 경우
-    ~~~
-    // g6 is currently a pseudo type which enables required g6 settings and then sets g5
-    case DexcomG6:
-        Ob1G5CollectionService.setG6Defaults();
+- Dexcom G6, G7, 1 / G5에 해당하는 경우
+~~~
+// g6 is currently a pseudo type which enables required g6 settings and then sets g5
+case DexcomG6:
+    Ob1G5CollectionService.setG6Defaults();
 
-        DexCollectionType.setDexCollectionType(DexCollectionType.DexcomG5);
-        // intentional fall thru
-    
-    case DexcomG5:
-        final String pref = "dex_txid";
-        textSettingDialog(activity,
-                pref, activity.getString(R.string.dexcom_transmitter_id),
-                activity.getString(R.string.enter_your_transmitter_id_exactly),
-                InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD,
-                new Runnable() {
-                    @Override
-                    public void run() {
-                        // InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS does not seem functional here
-                        Pref.setString(pref, Pref.getString(pref, "").toUpperCase());
-                        if (!Dialog.askIfNeeded(activity, Pref.getString(pref, ""))) {
-                            Home.staticRefreshBGCharts();
-                        }
-                        CollectionServiceStarter.restartCollectionServiceBackground();
+    DexCollectionType.setDexCollectionType(DexCollectionType.DexcomG5);
+    // intentional fall thru
+
+case DexcomG5:
+    final String pref = "dex_txid";
+    textSettingDialog(activity,
+            pref, activity.getString(R.string.dexcom_transmitter_id),
+            activity.getString(R.string.enter_your_transmitter_id_exactly),
+            InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD,
+            new Runnable() {
+                @Override
+                public void run() {
+                    // InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS does not seem functional here
+                    Pref.setString(pref, Pref.getString(pref, "").toUpperCase());
+                    if (!Dialog.askIfNeeded(activity, Pref.getString(pref, ""))) {
+                        Home.staticRefreshBGCharts();
                     }
-                });
-        break;
-    ~~~
-    - CareSens Air에 해당하는 경우
-    ~~~
-    TODO : DexCollectionType.NSEmulator에 대해서는 어떻게 처리하는가? case 문에서는 확인안됨
-    ~~~
-    - Libre Patched에 해당하는 경우
-    ~~~
-    case LibreReceiver:
-        Home.staticRefreshBGChartsOnIdle();
-        break;
-    ~~~
+                    CollectionServiceStarter.restartCollectionServiceBackground();
+                }
+            });
+    break;
+~~~
+- CareSens Air에 해당하는 경우
+~~~
+TODO : DexCollectionType.NSEmulator에 대해서는 어떻게 처리하는가? case 문에서는 확인안됨
+~~~
+- Libre Patched에 해당하는 경우
+~~~
+case LibreReceiver:
+    Home.staticRefreshBGChartsOnIdle();
+    break;
+~~~
