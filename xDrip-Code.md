@@ -4,8 +4,36 @@
 ## com/eveningoutpost/dexdrip/
 
 ### Home.java
-- 기본 홈 화면 코드
-#### updateCurrentBgInfo() : 
+기본 홈 화면 코드  
+BroadcastReceiver을 이용한 데이터 수신 코드 확인 필요  
+BroadcastReceiver의 onReceive 메소드를 오버라이드함.  
+onReceive 메소드 내에서 updateCurrentBgInfo()를 통해 Blood Glucose 정보 업데이트함.  
+아래 onResume 메소드 내의 BroadcastReceiver 인스턴스 생성 참고  
+~~~
+        _broadcastReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context ctx, Intent intent) {
+                if (intent.getAction() != null && intent.getAction().equals(Intent.ACTION_TIME_TICK)) {
+                    if (msSince(lastDataTick) > SECOND_IN_MS * 30) {
+                        Inevitable.task("process-time-tick", 300, () -> runOnUiThread(() -> {
+                            updateCurrentBgInfo("time tick");
+                            updateHealthInfo("time_tick");
+                        }));
+                    }
+                }
+            }
+        };
+        newDataReceiver = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context ctx, Intent intent) {
+                lastDataTick = tsl();
+                updateCurrentBgInfo("new data");
+                updateHealthInfo("new_data");
+            }
+        };
+~~~
+
+updateCurrentBgInfo() 메소드도 중요함으로 확인 필요함.  
 
 #### setupCharts() : 
 차트 셋업 코드  
@@ -146,6 +174,10 @@ DexCollectionType.setDexCollectionType를 통해 수집할 대상 CGM 센서를 
 ~~~
 
 ## com/eveningoutpost/dexdrip/models/
+
+### Sensor.java
+
+
 ### LibreBluetooth.java
 LibreBluetooth 클래스 정의, Libre 블루투스 연결 코드  
 
