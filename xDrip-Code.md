@@ -43,7 +43,28 @@ chart.setLineChartData(bgGraphBuilder.lineData());
 ~~~
 utilityModels/BgGraphBuilder.java에 정의된 BgGraphBuilder는 수집되는 데이터를 차트에 반영할 수 있도록 함.  
 
+### BestGlucose.java
+BestGlucose는 models/BgReading.java의 postProcess 함수에서 사용됨.
+
+#### minutesAgo() :
+몇분 전(mssince 값)의 데이터가 갱신되었는지 알려주는 string을 반환함.
+
+
 ## com/eveningoutpost/dexdrip/utilitymodels
+
+### BgSendQueue.java
+#### handleNewBgReading() : 
+BgReading의 postProcess함수에서 호출되는 함수로, 새로운 데이터를 전달(브로드캐스트)하는 역할. 동시에 WakeLock을 사용하여 중요한 작업이 수행되는 동안 CPU가 절전 모드로 전환되지 않도록 함.  
+- JoH.getWakeLock을 사용하여 120초 동안 유지되는 WakeLock을 획득. WakeLock은 CPU가 잠들지 않도록 방지함.
+- UploaderQueue.newEntry 메서드를 호출하여 bgReading을 업로드 큐에 추가. (코드에서 is_follower에 따른 조건은 주석 처리되어 있음.)  
+- UI 업데이트: quick가 false인 경우 추가 UI 업데이트를 수행함. Home.activityVisible이 true인 경우 ACTION_NEW_BG_ESTIMATE_NO_DATA 인텐트를 브로드캐스트함. xDripWidget이 있는 경우 WidgetUpdateService를 시작함.  
+- 로컬 브로드캐스트 전송: BroadcastGlucose.sendLocalBroadcast 메서드를 호출하여 bgReading을 로컬 브로드캐스트.
+- 추가 WakeLock: quick가 false이고 excessive_wakelocks 설정이 true인 경우, 3초 동안 추가 WakeLock을 획득.  
+- 새 데이터 관찰자 호출: quick가 false인 경우 NewDataObserver.newBgReading 메서드를 호출하여 새로운 혈당 데이터를 관찰자에게 전달함.
+- 팔로워 동기화: is_follower가 false이고 plus_follow_master 설정이 true인 경우, 혈당 데이터를 플러그인을 통해 동기화함.
+- 업로더 큐 처리: JoH.ratelimit 메서드를 사용하여 30초 내에 한 번만 SyncService를 시작하도록 함.
+- WakeLock 해제: 모든 작업이 완료된 후 JoH.releaseWakeLock 메서드를 호출하여 WakeLock을 해제함.
+
 ### BgGraphBuilder.java
 BgGraphBuilder 초기화 함수
 ~~~
