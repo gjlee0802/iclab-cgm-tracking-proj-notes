@@ -35,6 +35,9 @@ onReceive 메소드 내에서 updateCurrentBgInfo()를 통해 Blood Glucose 정�
 
 updateCurrentBgInfo() 메소드도 중요함으로 확인 필요함.  
 
+#### updateCurrentBgInfo() : 
+특정 소스에서 가져온 데이터를 기반으로 현재 혈당 정보를 업데이트함. 이 과정은 UI 요소의 업데이트와 다양한 설정 및 상태를 확인하는 과정을 포함.
+
 #### setupCharts() : 
 차트 셋업 코드  
 아래처럼 setLineChartData 메서드를 통해 시각화할 데이터를 입력
@@ -48,6 +51,34 @@ BestGlucose는 models/BgReading.java의 postProcess 함수에서 사용됨.
 
 #### minutesAgo() :
 몇분 전(mssince 값)의 데이터가 갱신되었는지 알려주는 string을 반환함.
+
+#### getDisplayGlucose() :
+TODO
+
+### NSEmulatorReceiver.java
+CareSens 사용할 경우에 해당.  
+BroadcastReceiver을 상속함.
+#### onReceive() : 
+Broadcast를 수신할 경우에 호출되는 메서드.  
+Intents.XDRIP_PLUS_NS_EMULATOR 액션에 대한 처리.  
+SGV를 수신할 경우 bgReadingInsertFromData() 메서드를 호출함.  
+
+collection 값을 가져와서, 그 값에 따라 데이터 처리:  
+- entries:
+    - data 문자열을 가져와서 JSON 배열로 변환.
+    - JSON 배열의 길이에 따라 다른 처리:
+        - 길이가 1 이상인 경우:
+            - 첫 번째 JSON 객체에서 ROW_ID를 가져와서 프로세스 ID를 확인하고, OOP 결과를 처리.
+        - 길이가 1인 경우:
+            - type 값을 가져와서:
+                - sgv: 혈당값과 방향을 처리하여 bgReadingInsertFromData 메서드를 호출.
+                - 다른 타입의 경우, 알 수 없는 타입으로 로그를 기록.
+
+#### bgReadingInsertFromData() : 
+**BgReading.java의 bgReadingInsertFromJson() 메서드 호출**.  
+이 메서드는 주어진 타임스탬프, 혈당값(sgv), 경사(slope) 데이터를 기반으로 새로운 BgReading 객체를 생성하고, 이를 JSON 형태로 변환하여 삽입함.  
+데이터 삽입 후 알림을 발생시키고, 필요한 경우 기본 센서를 초기화.  
+주요 작업 중 예외가 발생하면 로그에 기록하고 null을 반환.  
 
 
 ## com/eveningoutpost/dexdrip/utilitymodels
