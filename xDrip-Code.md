@@ -80,6 +80,27 @@ collection 값을 가져와서, 그 값에 따라 데이터 처리:
 데이터 삽입 후 알림을 발생시키고, 필요한 경우 기본 센서를 초기화.  
 주요 작업 중 예외가 발생하면 로그에 기록하고 null을 반환.  
 
+### LibreReceiver.java
+Freestyle Libre 사용할 경우에 해당.  
+BroadcastReceiver을 상속함.
+
+#### onReceive() : 
+Broadcast를 수신할 경우에 호출되는 메서드.  
+액션별 처리 : 
+- Intents.LIBRE2_ACTIVATION: 센서 활성화 처리
+    - 센서 시작 시간 저장
+    - 기본 센서 생성
+- Intents.LIBRE2_SCAN: 스캔된 데이터 처리
+    - 실시간 혈당 데이터와 과거 혈당 데이터 처리
+    - 그래프 갱신
+- Intents.LIBRE2_CONNECTION: 연결 상태 처리
+    - 블루투스 주소 및 연결 상태 저장
+- Intents.LIBRE2_BG: 혈당 값 처리
+    - 현재 값 처리 및 저장
+    - NFC 센서 나이 초기화
+
+#### processValues() : 
+**BgReading.java의 bgReadingInsertLibre2() 메서드 호출**
 
 ## com/eveningoutpost/dexdrip/utilitymodels
 
