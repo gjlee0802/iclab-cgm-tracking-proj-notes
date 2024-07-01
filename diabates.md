@@ -1,4 +1,5 @@
 # 당뇨병에 대한 도메인 지식
+출처: 세브란스 건강 정보(https://sev.severance.healthcare/health/encyclopedia/disease/disease.do?mode=view&articleNo=66704)
 
 ## 당뇨병이란?
 당뇨병이란 
