@@ -102,7 +102,7 @@ Broadcast를 수신할 경우에 호출되는 메서드.
 #### processValues() : 
 **BgReading.java의 bgReadingInsertLibre2() 메서드 호출**
 
-## com/eveningoutpost/dexdrip/utilitymodels
+## com/eveningoutpost/dexdrip/utilitymodels/
 
 ### BgSendQueue.java
 #### handleNewBgReading() : 
