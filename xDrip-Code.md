@@ -246,10 +246,200 @@ DexCollectionType.setDexCollectionType를 통해 수집할 대상 CGM 센서를 
             });
 ~~~
 
+## com/eveningoutpost/dexdrip/g5model/
+
+### Ob1G5StateMachine.java
+OB1 G5 communication 로직을 다루는 코드  
+
+#### doGetData() : 
+
+데이터 요청
+~~~
+connection.writeCharacteristic(Control, nn(use_g5_internal_alg ? (getEGlucose(parent) ? new EGlucoseTxMessage(shortTxId()).byteSequence : new GlucoseTxMessage().byteSequence) : new SensorTxMessage().byteSequence))
+        .subscribe(
+                characteristicValue -> {
+                    if (d)
+                        UserError.Log.d(TAG, "Wrote SensorTxMessage request");
+                }, throwable -> {
+                    UserError.Log.e(TAG, "Failed to write SensorTxMessage: " + throwable);
+                    if (throwable instanceof BleGattCharacteristicException) {
+                        final int status = ((BleGattCharacteristicException) throwable).getStatus();
+                        UserError.Log.e(TAG, "Got status message: " + getStatusName(status));
+                        if (status == 8) {
+                            UserError.Log.e(TAG, "Request rejected due to Insufficient Authorization failure!");
+                            parent.authResult(false);
+                        }
+                    }
+                });
+~~~
+
+데이터 수신 및 처리
+~~~
+flatMap(notificationObservable -> notificationObservable)
+        .timeout(6, TimeUnit.SECONDS)
+        .subscribe(bytes -> {
+            UserError.Log.d(TAG, "Received indication bytes: " + bytesToHex(bytes));
+            final PacketShop data_packet = classifyPacket(bytes);
+            switch (data_packet.type) {
+                ...
+~~~
+Dexcom G7의 경우, EGlucoseRxMessage2 유형 메시지 수신을 통해 glucose 확인  
+EGlucoseRxMessage2.java 코드의 EGlucoseRxMessage2 클래스 활용  
+성공적으로 glucose 수치를 얻어내면 "Status: Got glucose"의 로그 확인 가능  
+glucose 데이터 수신 후 glucoseRxCommon 메서드 호출  
+
+~~~
+case EGlucoseRxMessage2:
+    val eglucose2 = (EGlucoseRxMessage2) data_packet.msg;
+    UserError.Log.d(TAG, "EG2 Debug: " + eglucose2);
+    if (eglucose2.isValid()) {
+        parent.processCalibrationState(eglucose2.calibrationState());
+        DexTimeKeeper.updateAge(getTransmitterID(), (int) eglucose2.timestamp);
+        DexSessionKeeper.setStart(eglucose2.getRealSessionStartTime());
+        if (eglucose2.usable()) {
+            parent.msg("Got glucose");
+        } else {
+            parent.msg("Got data");
+        }
+        glucoseRxCommon(eglucose2, parent, connection);
+        parent.saveTransmitterMac();
+    } else {
+        parent.msg("Invalid Glucose");
+    }
+    break;
+~~~
+
+#### glucoseRxCommon() : 
+1. Raw 데이터 요청  
+~~~
+if (JoH.ratelimit("ob1-g5-also-read-raw", 20)) {
+    if (FirmwareCapability.isTransmitterRawCapable(getTransmitterID())) {
+        enqueueUniqueCommand(new SensorTxMessage(), "Also read raw");
+    } else {
+        handleNonSensorRxState(parent, connection);
+    }
+}
+~~~
+
+* JoH.ratelimit("ob1-g5-also-read-raw", 20): 20초 간격으로 rate limit을 확인
+* FirmwareCapability.isTransmitterRawCapable(getTransmitterID()): 현재 트랜스미터가 raw 데이터를 지원하는지 확인
+    * 지원하면 SensorTxMessage를 큐에 추가하여 raw 데이터를 요청
+    * 지원하지 않으면 handleNonSensorRxState 함수를 호출하여 다른 상태를 처리
+
+2. Time 메시지 요청  
+~~~
+if (JoH.pratelimit("g5-tx-time-since", 7200)
+        || glucose.calibrationState().warmingUp()
+        || !DexSessionKeeper.isStarted()) {
+    if (JoH.ratelimit("g5-tx-time-governer", 30)) {
+        if (getTransmitterID().length() > 4) {
+            enqueueUniqueCommand(new TimeTxMessage(), "Periodic Query Time");
+        }
+    }
+}
+~~~
+* JoH.pratelimit("g5-tx-time-since", 7200): 2시간 간격으로 rate limit을 확인
+* glucose.calibrationState().warmingUp(): 글루코스 데이터가 웜업 상태인지 확인
+* !DexSessionKeeper.isStarted(): 세션이 시작되지 않았는지 확인
+* 위 조건 중 하나라도 충족하면, 추가로 30초 rate limit을 확인
+* 트랜스미터 ID 길이가 4보다 크면, TimeTxMessage를 큐에 추가하여 주기적인 시간을 요청
+3. 백필(Backfill) 요청 및 데이터 처리  
+~~~
+if (glucose.calibrationState().readyForBackfill() && !parent.getBatteryStatusNow) {
+    backFillIfNeeded(parent, connection);
+}
+processGlucoseRxMessage(parent, glucose);
+parent.updateLast(tsl());
+parent.clearErrors();
+~~~
+* glucose.calibrationState().readyForBackfill() && !parent.getBatteryStatusNow: 백필이 필요하고 배터리 상태를 확인 중이지 않은 경우.
+    * backFillIfNeeded(parent, connection): 필요시 백필을 수행
+* processGlucoseRxMessage(parent, glucose): 수신된 글루코스 메시지를 처리
+* parent.updateLast(tsl()): 마지막 업데이트 시간을 갱신
+* parent.clearErrors(): 에러를 초기화
+
+#### processGlucoseRxMessage() : 
+**초기 검사 및 설정**  
+1. 초기 설정  
+~~~
+lastGlucosePacket = tsl();
+DexTimeKeeper.updateAge(getTransmitterID(), glucose.timestamp);
+~~~
+* lastGlucosePacket을 현재 시간으로 설정합니다.
+* DexTimeKeeper를 사용해 트랜스미터 ID와 함께 glucose의 타임스탬프를 업데이트합니다.
+
+2. 센서 활성화 검사  
+~~~
+if (glucose.calibrationState().warmingUp()) {
+    checkAndActivateSensor();
+}
+~~~
+
+3. 센서 활성화 검사  
+~~~
+if (glucose.calibrationState().warmingUp()) {
+    checkAndActivateSensor();
+}
+~~~
+* 글루코스 데이터가 웜업 상태인지 확인하고, 웜업 중이면 센서를 활성화합니다.
+
+**Usable 데이터 처리**  
+
+4. Usable 데이터 확인  
+~~~
+if (glucose.usable() || (glucose.insufficient() && Pref.getBoolean("ob1_g5_use_insufficiently_calibrated", true))) {
+    UserError.Log.d(TAG, "Got usable glucose data from transmitter!!");
+    final long rxtimestamp = glucose.getRealTimestamp();
+    checkAndActivateSensor();
+~~~
+* 글루코스 데이터가 사용 가능하거나, 불충분하지만 설정에서 불충분한 데이터 사용을 허용하면 다음을 수행합니다:
+    * 로그를 기록합니다.
+    * rxtimestamp에 실제 타임스탬프를 저장합니다.
+    * 센서를 활성화합니다.
+
+5. 데이터 저장 및 처리  
+~~~
+DexSyncKeeper.store(getTransmitterID(), rxtimestamp, parent.static_last_connected, lastGlucosePacket);
+final BgReading bgReading = BgReading.bgReadingInsertFromG5(glucose.glucose, rxtimestamp);
+~~~
+* DexSyncKeeper에 데이터를 저장합니다.
+* BgReading 객체를 생성하고, 글루코스 값을 삽입합니다.
+
+**BgReading 객체 처리**  
+6. BgReading 객체 추가 설정  
+~~~
+if (bgReading != null) {
+    try {
+        bgReading.calculated_value_slope = glucose.getTrend() / Constants.MINUTE_IN_MS; // note this is different to the typical calculated slope, (normally delta)
+        if (bgReading.calculated_value_slope == Double.NaN) {
+            bgReading.hide_slope = true;
+        }
+    } catch (Exception e) {
+        // not a good number - does this exception ever actually fire?
+    }
+    if (!FirmwareCapability.isTransmitterRawCapable(getTransmitterID())) {
+        bgReading.noRawWillBeAvailable();
+    }
+    if (glucose.insufficient()) {
+        bgReading.appendSourceInfo("Insufficient").save();
+    }
+} else {
+    UserError.Log.wtf(TAG, "New BgReading was null in processGlucoseRxMessage!");
+}
+~~~
+* bgReading이 null이 아니면 다음을 수행합니다:
+    * 트렌드 값을 계산하여 calculated_value_slope에 저장합니다.
+    * NaN 값인지 확인하고, NaN이면 hide_slope를 true로 설정합니다.
+    * 트랜스미터가 raw 데이터를 지원하지 않으면 noRawWillBeAvailable 메서드를 호출합니다.
+    * 불충분한 데이터이면 appendSourceInfo("Insufficient")를 호출하고 저장합니다.
+* bgReading이 null이면 에러 로그를 기록합니다.
+
+7. 마지막 글루코스 패킷 업데이트  
+
+
 ## com/eveningoutpost/dexdrip/models/
 
 ### Sensor.java
-
 
 ### LibreBluetooth.java
 LibreBluetooth 클래스 정의, Libre 블루투스 연결 코드  
@@ -266,6 +456,19 @@ LibreBluetooth 클래스 정의, Libre 블루투스 연결 코드
 ## com/eveningoutpost/dexdrip/services/
 ### DexCollectionService.java
 LibreBluetooth 모델을 이용하여 블루투스로 Libre 데이터를 수집하는 서비스 코드  
+
+
+### Ob1G5CollectionService.java
+state는 현재 프로세스가 어떤 상태에 놓이는지에 대한 변수이다.  
+1. SCAN
+2. CONNECT_NOW
+3. DISCOVER
+4. CHECK_AUTH
+5. GET_DATA
+- Ob1G5StateMachine.java의 `doGetData` 메서드 호출
+6. CLOSE
+
+
 
 ### G5CollectionService.java
 com.eveningoutpost.dexdrip.g5model 내의 모델을 이용하여 블루투스로 Dexcom 데이터를 수집하는 서비스 코드
