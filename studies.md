@@ -1,5 +1,6 @@
 - counterfactual 개념  
-section 9.3 : https://christophm.github.io/interpretable-ml-book/counterfactual.html  
+    - section 9.3 : https://christophm.github.io/interpretable-ml-book/counterfactual.html
+    - 한글 버전 : https://eair.tistory.com/32
 - 모바일 데이터 기반의 causal inference"의 경우, 아래의 튜토리얼 논문을 참고하기  
 https://doi.org/10.1145/3648356  
     ~~~
